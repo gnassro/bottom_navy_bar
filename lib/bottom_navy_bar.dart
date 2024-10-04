@@ -2,6 +2,8 @@ library bottom_navy_bar;
 
 import 'package:flutter/material.dart';
 
+typedef BottomNavyBarItemWidgetBuilder = Widget Function(BuildContext context, bool isActive);
+
 /// A beautiful and animated bottom navigation that paints a rounded shape
 /// around its [items] to provide a wonderful look.
 ///
@@ -82,7 +84,7 @@ class BottomNavyBar extends StatelessWidget {
 
   /// Used to configure the padding of the [BottomNavyBarItem] [items].
   /// Defaults to EdgeInsets.symmetric(horizontal: 4).
-  final EdgeInsets itemPadding;
+  final EdgeInsetsGeometry itemPadding;
 
   /// Used to configure the animation curve. Defaults to [Curves.linear].
   final Curve curve;
@@ -118,19 +120,19 @@ class BottomNavyBar extends StatelessWidget {
             mainAxisAlignment: mainAxisAlignment,
             children: items.map((item) {
               var index = items.indexOf(item);
-              return GestureDetector(
-                onTap: () => onItemSelected(index),
-                child: _ItemWidget(
-                  item: item,
-                  iconSize: iconSize,
-                  isSelected: index == selectedIndex,
-                  backgroundColor: bgColor,
-                  itemCornerRadius: itemCornerRadius,
-                  animationDuration: animationDuration,
-                  itemPadding: itemPadding,
-                  curve: curve,
-                  showInactiveTitle: showInactiveTitle,
-                ),
+              return _ItemWidget(
+                item: item,
+                iconSize: iconSize,
+                isSelected: index == selectedIndex,
+                backgroundColor: bgColor,
+                itemCornerRadius: itemCornerRadius,
+                animationDuration: animationDuration,
+                onItemSelected: onItemSelected,
+                itemPadding: itemPadding,
+                itemIndex: index,
+                curve: curve,
+                itemsCount: items.length,
+                showInactiveTitle: showInactiveTitle,
               );
             }).toList(),
           ),
@@ -147,117 +149,109 @@ class _ItemWidget extends StatelessWidget {
   final Color backgroundColor;
   final double itemCornerRadius;
   final Duration animationDuration;
-  final EdgeInsets itemPadding;
+  final EdgeInsetsGeometry itemPadding;
   final Curve curve;
   final bool showInactiveTitle;
+  final int itemsCount;
+  final int itemIndex;
+  final ValueChanged<int> onItemSelected;
 
   const _ItemWidget({
     Key? key,
     required this.iconSize,
     required this.isSelected,
     required this.item,
+    required this.itemIndex,
     required this.backgroundColor,
     required this.itemCornerRadius,
     required this.animationDuration,
     required this.itemPadding,
     required this.showInactiveTitle,
+    required this.itemsCount,
+    required this.onItemSelected,
     this.curve = Curves.linear,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    Semantics semantic = Semantics(
-      container: true,
-      selected: isSelected,
-      child: AnimatedContainer(
-        width: (showInactiveTitle)
-            ? ((isSelected)
-                ? MediaQuery.of(context).size.width * 0.25
-                : MediaQuery.of(context).size.width * 0.2)
-            : ((isSelected)
-                ? MediaQuery.of(context).size.width * 0.3
-                : MediaQuery.of(context).size.width * 0.1),
-        height: double.maxFinite,
-        duration: animationDuration,
-        curve: curve,
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (item.activeBackgroundColor ??
-                  item.activeColor.withOpacity(0.2))
-              : backgroundColor,
-          borderRadius: BorderRadius.circular(itemCornerRadius),
-        ),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          physics: NeverScrollableScrollPhysics(),
-          child: Container(
-            width: (showInactiveTitle)
-                ? ((isSelected)
-                ? MediaQuery.of(context).size.width * 0.25
-                : MediaQuery.of(context).size.width * 0.2)
-                : ((isSelected)
-                ? MediaQuery.of(context).size.width * 0.3
-                : MediaQuery.of(context).size.width * 0.1),
-            padding: EdgeInsets.symmetric(horizontal: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.max,
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                IconTheme(
-                  data: IconThemeData(
-                    size: iconSize,
-                    color: isSelected
-                        ? item.activeColor.withOpacity(1)
-                        : item.inactiveColor == null
-                            ? item.activeColor
-                            : item.inactiveColor,
+    Widget semantic = LayoutBuilder(
+        builder: (context, constraint) {
+        return GestureDetector(
+          onTap: () => onItemSelected(itemIndex),
+          child: Semantics(
+            container: true,
+            selected: isSelected,
+            child: AnimatedContainer(
+              duration: animationDuration,
+              curve: curve,
+              width: isSelected ? null : constraint.maxWidth,
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? (item.activeBackgroundColor ??
+                    item.activeColor.withOpacity(0.2))
+                    : backgroundColor,
+                borderRadius: BorderRadius.circular(itemCornerRadius),
+              ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: NeverScrollableScrollPhysics(),
+                child: Container(
+                  width: isSelected ? null : constraint.maxWidth,
+                  padding: itemPadding,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      item.icon(context, isSelected),
+                      if (showInactiveTitle)
+                        SizedBox(
+                          child: DefaultTextStyle.merge(
+                            style: TextStyle(
+                              color: item.activeTextColor ?? item.activeColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            textAlign: item.textAlign,
+                            overflow: TextOverflow.ellipsis,
+                            child: item.title(context, isSelected),
+                          ),
+                        )
+                      else if (isSelected)
+                        SizedBox(
+                          child: DefaultTextStyle.merge(
+                            style: TextStyle(
+                              color: item.activeColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            textAlign: item.textAlign,
+                            overflow: TextOverflow.ellipsis,
+                            child: item.title(context, isSelected),
+                          ),
+                        ),
+                    ],
                   ),
-                  child: item.icon,
                 ),
-                if (showInactiveTitle)
-                  Flexible(
-                    child: Container(
-                      padding: itemPadding,
-                      child: DefaultTextStyle.merge(
-                        style: TextStyle(
-                          color: item.activeTextColor ?? item.activeColor,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        textAlign: item.textAlign,
-                        overflow: TextOverflow.ellipsis,
-                        child: item.title,
-                      ),
-                    ),
-                  )
-                else if (isSelected)
-                  Flexible(
-                    child: Container(
-                      padding: itemPadding,
-                      child: DefaultTextStyle.merge(
-                        style: TextStyle(
-                          color: item.activeColor,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        textAlign: item.textAlign,
-                        overflow: TextOverflow.ellipsis,
-                        child: item.title,
-                      ),
-                    ),
-                  ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      }
     );
-    return item.tooltipText == null
+    final Widget itemWidget = item.tooltipText == null
         ? semantic
         : Tooltip(
       message: item.tooltipText!,
       child: semantic,
+    );
+    return isSelected ? ConstrainedBox(
+        child: itemWidget,
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.sizeOf(context).width * 0.5
+      ),
+    ) : Expanded(
+        child: itemWidget
     );
   }
 }
@@ -276,10 +270,10 @@ class BottomNavyBarItem {
   });
 
   /// Defines this item's icon which is placed in the right side of the [title].
-  final Widget icon;
+  final BottomNavyBarItemWidgetBuilder icon;
 
   /// Defines this item's title which placed in the left side of the [icon].
-  final Widget title;
+  final BottomNavyBarItemWidgetBuilder title;
 
   /// The [icon] and [title] color defined when this item is selected. Defaults
   /// to [Colors.blue].
